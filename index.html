@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SoTA Research | Financial Dashboard</title>
+    <link rel="icon" type="image/svg" href="media/sota-icon.svg">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root { 
+            --prod: #7c3aed; /* Morado RL */
+            --client: #f59e0b; /* Naranja Clientes */
+            --money: #10b981; /* Verde Dinero */
+            --cost: #ef4444; /* Rojo Costos */
+            --bg: #f1f5f9; 
+            --text: #334155;
+            --sidebar-bg: #ffffff;
+        }
+        body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); padding: 0; margin: 0; }
+        
+        .layout { display: grid; grid-template-columns: 340px 1fr; min-height: 100vh; }
+        .sidebar { background: var(--sidebar-bg); padding: 25px; border-right: 1px solid #e2e8f0; display: flex; flex-direction: column; gap: 20px; overflow-y: auto; height: 100vh; position: sticky; top: 0; box-sizing: border-box; }
+        
+        /* Branding */
+        .brand { display: flex; align-items: center; gap: 15px; margin-bottom: 10px; padding-bottom: 20px; border-bottom: 2px solid #f1f5f9; }
+        .logo-img { max-height: 40px; width: auto; }
+        .brand h1 { margin: 0; font-size: 1.2rem; color: #0f172a; line-height: 1.2; }
+        .brand small { display: block; font-size: 0.75rem; color: #64748b; font-weight: normal; }
+
+        /* Controls */
+        h3 { margin: 15px 0 10px 0; font-size: 0.8rem; text-transform: uppercase; color: #94a3b8; letter-spacing: 1px; font-weight: 800; }
+        .control-group { background: #f8fafc; padding: 12px; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 10px; }
+        .label-row { display: flex; justify-content: space-between; margin-bottom: 6px; font-weight: 600; font-size: 0.85rem; }
+        
+        input[type="range"] { width: 100%; cursor: pointer; height: 6px; border-radius: 5px; appearance: none; background: #cbd5e1; }
+        input[type="range"]::-webkit-slider-thumb { appearance: none; width: 16px; height: 16px; border-radius: 50%; background: var(--money); cursor: pointer; }
+        input[type="number"] { width: 100%; padding: 6px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 0.9rem; box-sizing: border-box; }
+
+        .c-prod input[type=range]::-webkit-slider-thumb { background: var(--prod); }
+        .c-prod .val { color: var(--prod); }
+        .c-client input[type=range]::-webkit-slider-thumb { background: var(--client); }
+        .c-client .val { color: var(--client); }
+        .c-cost input[type=range]::-webkit-slider-thumb { background: var(--cost); }
+        .c-cost .val { color: var(--cost); }
+
+        .main { padding: 30px; display: flex; flex-direction: column; gap: 25px; overflow-y: auto; }
+        .top-bar { display: flex; justify-content: space-between; align-items: center; background: white; padding: 15px 25px; border-radius: 12px; border: 1px solid #e2e8f0; }
+        .time-control { display: flex; align-items: center; gap: 15px; }
+        .time-control label { font-weight: bold; color: #475569; }
+        select { padding: 8px 15px; border-radius: 6px; border: 1px solid #cbd5e1; font-weight: bold; color: #334155; cursor: pointer; }
+
+        .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; }
+        .card { background: white; padding: 20px; border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
+        .card span { display: block; font-size: 0.75rem; text-transform: uppercase; color: #64748b; font-weight: 700; margin-bottom: 5px; }
+        .card strong { display: block; font-size: 1.8rem; color: #0f172a; font-weight: 800; }
+        .card.green { border-bottom: 4px solid var(--money); }
+        .card.red { border-bottom: 4px solid var(--cost); }
+        .card.blue { border-bottom: 4px solid var(--prod); }
+
+        .chart-box { background: white; padding: 20px; border-radius: 12px; border: 1px solid #e2e8f0; height: 450px; position: relative; }
+        .table-wrap { background: white; border-radius: 12px; border: 1px solid #e2e8f0; overflow: hidden; }
+        table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+        th { background: #f8fafc; padding: 12px 15px; text-align: right; color: #475569; font-weight: 700; position: sticky; top: 0; }
+        td { padding: 10px 15px; text-align: right; border-bottom: 1px solid #f1f5f9; }
+        th:first-child, td:first-child { text-align: left; }
+        
+        .money-pos { color: var(--money); font-weight: bold; font-family: monospace; }
+        .money-neg { color: var(--cost); font-weight: bold; font-family: monospace; }
+        .net-profit { background: #ecfdf5; color: #059669; font-weight: bold; }
+        .net-loss { background: #fef2f2; color: #dc2626; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+<div class="layout">
+    <div class="sidebar">
+        <div class="brand">
+            <img src="media/sota_logo.png" alt="SoTA Logo" class="logo-img" onerror="this.style.display='none'">
+            <div>
+                <h1>SoTA Research</h1>
+                <small>Proyección Financiera</small>
+            </div>
+        </div>
+
+        <h3>1. Producción (Research Lines)</h3>
+        <div class="control-group c-prod">
+            <div class="label-row">
+                <label>Nuevas RL / mes</label>
+                <span class="val" id="v_newRl">4</span>
+            </div>
+            <input type="range" id="newRlRate" min="0" max="10" step="0.5" value="2" oninput="run()">
+            <small style="color:#94a3b8; font-size:0.75rem">Crecimiento Lineal del Catálogo</small>
+        </div>
+
+        <h3>2. Clientes (Demanda)</h3>
+        <div class="control-group c-client">
+            <div class="label-row">
+                <label>Crecimiento Mes (%)</label>
+                <span class="val" id="v_growth">15%</span>
+            </div>
+            <input type="range" id="growthRate" min="1" max="30" step="0.5" value="15" oninput="run()">
+        </div>
+        
+        <div class="control-group c-client">
+            <div class="label-row"><label>Clientes Iniciales</label></div>
+            <input type="number" id="startClients" value="3" oninput="run()">
+        </div>
+
+        <div class="control-group c-client">
+            <div class="label-row">
+                <label>Churn Clientes (%)</label>
+                <span class="val" id="v_churn">3%</span>
+            </div>
+            <input type="range" id="churnRate" min="0" max="15" step="0.5" value="3" oninput="run()">
+        </div>
+
+        <h3>3. Modelo de Negocio</h3>
+        <div class="control-group c-money">
+            <div class="label-row">
+                <label>Precio Venta / RL ($)</label>
+                <span class="val" id="v_price">$40</span>
+            </div>
+            <input type="range" id="price" min="10" max="300" step="5" value="40" oninput="run()">
+        </div>
+
+        <div class="control-group c-money">
+            <div class="label-row">
+                <label>RL por Cliente (Avg)</label>
+                <span class="val" id="v_density">1.4</span>
+            </div>
+            <input type="range" id="density" min="1" max="5" step="0.1" value="1.4" oninput="run()">
+        </div>
+
+        <h3>4. Costos Operativos</h3>
+        <div class="control-group c-cost">
+            <div class="label-row">
+                <label>Costo Mantenimiento / RL</label>
+                <span class="val" id="v_cost">$30</span>
+            </div>
+            <input type="range" id="costPerRL" min="0" max="200" step="5" value="30" oninput="run()">
+            <small style="color:#ef4444; font-size:0.75rem">Costo mensual por tener 1 RL activa</small>
+        </div>
+    </div>
+
+    <div class="main">
+        <div class="top-bar">
+            <div class="time-control">
+                <label>Horizonte de Proyección:</label>
+                <select id="timeframe" onchange="run()">
+                    <option value="12">12 Meses (1 Año)</option>
+                    <option value="24" selected>24 Meses (2 Años)</option>
+                    <option value="36">36 Meses (3 Años)</option>
+                    <option value="48">48 Meses (4 Años)</option>
+                    <option value="60">60 Meses (5 Años)</option>
+                </select>
+            </div>
+            <div style="font-size:0.9rem; color:#64748b;">Simulador Interactivo v2.3</div>
+        </div>
+
+        <div class="kpis">
+            <div class="card green">
+                <span>Ingresos (MRR Final)</span>
+                <strong id="k_mrr" style="color:var(--money)">$0</strong>
+            </div>
+            <div class="card red">
+                <span>Costos Operativos (Mes Final)</span>
+                <strong id="k_costs" style="color:var(--cost)">$0</strong>
+            </div>
+            <div class="card green">
+                <span>Margen Operativo (Profit)</span>
+                <strong id="k_margin">$0</strong>
+            </div>
+            <div class="card blue">
+                <span>Clientes / RL Activas</span>
+                <strong id="k_vol">0 / 0</strong>
+            </div>
+        </div>
+
+        <div class="chart-box">
+            <canvas id="mainChart"></canvas>
+        </div>
+
+        <div class="table-wrap">
+            <table id="dataTable">
+                <thead>
+                    <tr>
+                        <th style="text-align:center">Mes</th>
+                        <th>RL Activas</th>
+                        <th>Clientes</th>
+                        <th>Ingresos (MRR)</th>
+                        <th>Costos Op.</th>
+                        <th>Margen (Profit)</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+    let chartInstance = null;
+    const fmtUSD = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
+
+    function run() {
+        const months = parseInt(document.getElementById('timeframe').value);
+        const newRlRate = parseFloat(document.getElementById('newRlRate').value);
+        const growthPct = parseFloat(document.getElementById('growthRate').value) / 100;
+        const startClients = parseFloat(document.getElementById('startClients').value);
+        const churnPct = parseFloat(document.getElementById('churnRate').value) / 100;
+        const price = parseFloat(document.getElementById('price').value);
+        const density = parseFloat(document.getElementById('density').value);
+        const costPerRL = parseFloat(document.getElementById('costPerRL').value);
+
+        document.getElementById('v_newRl').innerText = newRlRate;
+        document.getElementById('v_growth').innerText = (growthPct*100).toFixed(1) + "%";
+        document.getElementById('v_churn').innerText = (churnPct*100).toFixed(1) + "%";
+        document.getElementById('v_price').innerText = "$" + price;
+        document.getElementById('v_density').innerText = density;
+        document.getElementById('v_cost').innerText = "$" + costPerRL;
+
+        let currentCatalog = 0; 
+        let currentClients = startClients;
+        
+        let labels = [];
+        let dataCatalog = [];
+        let dataClients = [];
+        let dataRevenue = [];
+        let dataCosts = [];
+        let dataProfit = [];
+
+        const tbody = document.querySelector('#dataTable tbody');
+        tbody.innerHTML = '';
+
+        for(let m=1; m<=months; m++) {
+            labels.push(`Mes ${m}`);
+
+            currentCatalog += newRlRate;
+
+            let netGrowthFactor = (1 + growthPct - churnPct);
+            currentClients = currentClients * netGrowthFactor;
+            if(currentClients < 0) currentClients = 0;
+
+            let effectiveDensity = Math.min(density, currentCatalog);
+            let totalSoldUnits = currentClients * effectiveDensity;
+            let revenue = totalSoldUnits * price;
+
+            let opCosts = currentCatalog * costPerRL;
+
+            let profit = revenue - opCosts;
+
+            dataCatalog.push(currentCatalog);
+            dataClients.push(currentClients);
+            dataRevenue.push(revenue);
+            dataCosts.push(opCosts);
+            dataProfit.push(profit);
+
+            let tr = document.createElement('tr');
+            let profitClass = profit >= 0 ? 'net-profit' : 'net-loss';
+
+            tr.innerHTML = `
+                <td style="text-align:center; font-weight:bold">${m}</td>
+                <td style="color:var(--prod)">${currentCatalog.toFixed(1)}</td>
+                <td style="color:var(--client)">${currentClients.toFixed(0)}</td>
+                <td class="money-pos">${fmtUSD.format(revenue)}</td>
+                <td class="money-neg">-${fmtUSD.format(opCosts)}</td>
+                <td class="${profitClass}">${fmtUSD.format(profit)}</td>
+            `;
+            tbody.appendChild(tr);
+        }
+
+        const lastIdx = months - 1;
+        document.getElementById('k_mrr').innerText = fmtUSD.format(dataRevenue[lastIdx]);
+        document.getElementById('k_costs').innerText = fmtUSD.format(dataCosts[lastIdx]);
+        document.getElementById('k_margin').innerText = fmtUSD.format(dataProfit[lastIdx]);
+        document.getElementById('k_margin').style.color = dataProfit[lastIdx] >= 0 ? 'var(--money)' : 'var(--cost)';
+        document.getElementById('k_vol').innerText = `${Math.floor(dataClients[lastIdx])} Clis. / ${Math.floor(dataCatalog[lastIdx])} RLs`;
+
+        drawChart(labels, dataRevenue, dataCosts, dataProfit, dataCatalog, dataClients);
+    }
+
+    function drawChart(labels, revenue, costs, profit, catalog, clients) {
+        const ctx = document.getElementById('mainChart').getContext('2d');
+        if(chartInstance) chartInstance.destroy();
+
+        chartInstance = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: 'Ingresos (MRR)',
+                        data: revenue,
+                        backgroundColor: 'rgba(16, 185, 129, 0.1)', 
+                        borderColor: '#10b981', 
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.3,
+                        yAxisID: 'y',
+                        order: 2
+                    },
+                    {
+                        label: 'Costos Op.',
+                        data: costs,
+                        borderColor: '#ef4444', 
+                        borderWidth: 2,
+                        borderDash: [5, 5],
+                        tension: 0.1,
+                        fill: false,
+                        yAxisID: 'y',
+                        order: 3
+                    },
+                    {
+                        label: 'Margen Neto',
+                        data: profit,
+                        borderColor: '#0f172a', 
+                        borderWidth: 1,
+                        pointRadius: 0,
+                        tension: 0.3,
+                        fill: false,
+                        yAxisID: 'y',
+                        order: 1
+                    },
+                    {
+                        label: 'Clientes Total',
+                        data: clients,
+                        borderColor: '#f59e0b', 
+                        borderWidth: 2,
+                        borderDash: [2, 2],
+                        pointRadius: 0,
+                        tension: 0.3,
+                        fill: false,
+                        yAxisID: 'y1', 
+                        order: 4
+                    },
+                    {
+                        label: 'RL Activas (Catálogo)',
+                        data: catalog,
+                        borderColor: '#7c3aed', 
+                        borderWidth: 2,
+                        pointRadius: 0,
+                        tension: 0.1, 
+                        fill: false,
+                        yAxisID: 'y1', 
+                        order: 5
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
+                plugins: {
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                let label = context.dataset.label || '';
+                                if (label) { label += ': '; }
+                                if (context.parsed.y !== null) {
+                                    if(context.dataset.yAxisID === 'y'){
+                                        label += new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(context.parsed.y);
+                                    } else {
+                                        label += Math.round(context.parsed.y);
+                                    }
+                                }
+                                return label;
+                            }
+                        }
+                    },
+                    legend: { position: 'top', labels: { usePointStyle: true, padding: 20 } }
+                },
+                scales: {
+                    y: {
+                        type: 'linear', display: true, position: 'left',
+                        ticks: { callback: function(value) { return '$' + value; } },
+                        title: { display: true, text: 'Valor Monetario ($)' }
+                    },
+                    y1: {
+                        type: 'linear', display: true, position: 'right',
+                        grid: { drawOnChartArea: false },
+                        title: { display: true, text: 'Cantidad (Unidades)' }
+                    }
+                }
+            }
+        });
+    }
+
+    run();
+</script>
+
+</body>
+</html>
