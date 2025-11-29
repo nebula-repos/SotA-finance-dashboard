@@ -92,6 +92,14 @@
         <h3>1. Producción (Research Lines)</h3>
         <div class="control-group c-prod">
             <div class="label-row">
+                <label>RL Iniciales Activas</label>
+                <span class="val" id="v_initialRl">5</span>
+            </div>
+            <input type="range" id="initialRl" min="0" max="100" step="1" value="5" oninput="run()">
+            <small style="color:#94a3b8; font-size:0.75rem">Stock inicial de RLs activas</small>
+        </div>
+        <div class="control-group c-prod">
+            <div class="label-row">
                 <label>Nuevas RL / mes</label>
                 <span class="val" id="v_newRl">4</span>
             </div>
@@ -225,6 +233,7 @@
         // --- 1. CAPTURAR INPUTS ---
         const months = parseInt(document.getElementById('timeframe').value);
         const newRlRate = parseFloat(document.getElementById('newRlRate').value);
+        const startCatalog = parseFloat(document.getElementById('initialRl').value);
         const startClients = parseFloat(document.getElementById('startClients').value);
         const churnPct = parseFloat(document.getElementById('churnRate').value) / 100;
         const price = parseFloat(document.getElementById('price').value);
@@ -238,6 +247,7 @@
         const growthMode = document.querySelector('input[name="growthMode"]:checked').value;
 
         // --- 2. ACTUALIZAR UI TEXTOS ---
+        document.getElementById('v_initialRl').innerText = startCatalog;
         document.getElementById('v_newRl').innerText = newRlRate;
         document.getElementById('v_churn').innerText = (churnPct*100).toFixed(1) + "%";
         document.getElementById('v_price').innerText = "$" + price;
@@ -254,7 +264,7 @@
         }
 
         // --- 3. INICIALIZACIÓN ---
-        let currentCatalog = 0; 
+        let currentCatalog = startCatalog; 
         let currentClients = startClients; // Este guarda los decimales (el "Pipeline")
         
         let labels = [];
