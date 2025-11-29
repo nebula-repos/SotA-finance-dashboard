@@ -27,6 +27,14 @@
         .brand h1 { margin: 0; font-size: 1.2rem; color: #0f172a; line-height: 1.2; }
         .brand small { display: block; font-size: 0.75rem; color: #64748b; font-weight: normal; }
 
+        .save-panel { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 10px; }
+        .save-title { font-weight: 800; font-size: 0.9rem; color: #0f172a; }
+        .save-panel small { display: block; color: #64748b; font-size: 0.78rem; }
+        .btn { padding: 8px 12px; border-radius: 8px; border: 1px solid #cbd5e1; background: white; color: #0f172a; cursor: pointer; font-weight: 700; font-size: 0.85rem; transition: 0.15s; }
+        .btn:hover { border-color: #94a3b8; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+        .btn.ghost { background: #0f172a; color: white; border-color: #0f172a; }
+        .btn.ghost:hover { background: #1e293b; }
+
         /* Controls */
         h3 { margin: 15px 0 10px 0; font-size: 0.8rem; text-transform: uppercase; color: #94a3b8; letter-spacing: 1px; font-weight: 800; }
         .control-group { background: #f8fafc; padding: 12px; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 10px; }
@@ -87,6 +95,13 @@
                 <h1>SoTA Research</h1>
                 <small>Proyección Financiera</small>
             </div>
+        </div>
+        <div class="save-panel">
+            <div>
+                <div class="save-title">Configuración</div>
+                <small id="saveStatus">Se guarda automáticamente en este navegador</small>
+            </div>
+            <button class="btn ghost" type="button" onclick="resetConfig()">Restablecer</button>
         </div>
 
         <h3>1. Producción (Research Lines)</h3>
@@ -228,14 +243,85 @@
 <script>
     let chartInstance = null;
     const fmtUSD = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
+    const STORAGE_KEY = 'sotaFinanceConfig';
+    const defaultConfig = {
+        timeframe: '24',
+        newRlRate: 4,
+        initialRl: 5,
+        startClients: 3,
+        churnRate: 3,
+        price: 40,
+        density: 1.4,
+        costPerRL: 30,
+        growthRate: 15,
+        growthMode: 'pct'
+    };
+
+    function setSaveStatus(text, isError = false) {
+        const el = document.getElementById('saveStatus');
+        if (!el) return;
+        el.textContent = text;
+        el.style.color = isError ? 'var(--cost)' : '#64748b';
+    }
+
+    function applyConfig(config) {
+        const cfg = { ...defaultConfig, ...config };
+        document.getElementById('timeframe').value = cfg.timeframe;
+        document.getElementById('newRlRate').value = cfg.newRlRate;
+        document.getElementById('initialRl').value = cfg.initialRl;
+        document.getElementById('startClients').value = cfg.startClients;
+        document.getElementById('churnRate').value = cfg.churnRate;
+        document.getElementById('price').value = cfg.price;
+        document.getElementById('density').value = cfg.density;
+        document.getElementById('costPerRL').value = cfg.costPerRL;
+        document.getElementById('growthRate').value = cfg.growthRate;
+
+        const growthRadio = document.querySelector(`input[name="growthMode"][value="${cfg.growthMode}"]`);
+        if (growthRadio) growthRadio.checked = true;
+    }
+
+    function loadConfig() {
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (!saved) {
+            applyConfig(defaultConfig);
+            return;
+        }
+        try {
+            const parsed = JSON.parse(saved);
+            applyConfig(parsed);
+            setSaveStatus('Configuración cargada');
+        } catch (err) {
+            console.warn('Config guardada inválida, usando defaults', err);
+            applyConfig(defaultConfig);
+            setSaveStatus('No se pudo leer la configuración guardada', true);
+        }
+    }
+
+    function persistConfig(configSnapshot) {
+        try {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(configSnapshot));
+            setSaveStatus('Guardado en este navegador');
+        } catch (err) {
+            console.error('No se pudo guardar la configuración', err);
+            setSaveStatus('No se pudo guardar la configuración', true);
+        }
+    }
+
+    function resetConfig() {
+        applyConfig(defaultConfig);
+        run();
+        setSaveStatus('Restablecido a valores predeterminados');
+    }
 
     function run() {
         // --- 1. CAPTURAR INPUTS ---
-        const months = parseInt(document.getElementById('timeframe').value);
+        const timeframeVal = document.getElementById('timeframe').value;
+        const months = parseInt(timeframeVal);
         const newRlRate = parseFloat(document.getElementById('newRlRate').value);
         const startCatalog = parseFloat(document.getElementById('initialRl').value);
         const startClients = parseFloat(document.getElementById('startClients').value);
-        const churnPct = parseFloat(document.getElementById('churnRate').value) / 100;
+        const churnRateVal = parseFloat(document.getElementById('churnRate').value);
+        const churnPct = churnRateVal / 100;
         const price = parseFloat(document.getElementById('price').value);
         const density = parseFloat(document.getElementById('density').value);
         const costPerRL = parseFloat(document.getElementById('costPerRL').value);
@@ -245,6 +331,18 @@
         
         // Detectar modo de crecimiento
         const growthMode = document.querySelector('input[name="growthMode"]:checked').value;
+        const configSnapshot = {
+            timeframe: timeframeVal,
+            newRlRate,
+            initialRl: startCatalog,
+            startClients,
+            churnRate: churnRateVal,
+            price,
+            density,
+            costPerRL,
+            growthRate: growthVal,
+            growthMode
+        };
 
         // --- 2. ACTUALIZAR UI TEXTOS ---
         document.getElementById('v_initialRl').innerText = startCatalog;
@@ -351,6 +449,7 @@
 
         // --- 5. GRÁFICO ---
         drawChart(labels, dataRevenue, dataCosts, dataProfit, dataCatalog, dataClients);
+        persistConfig(configSnapshot);
     }
 
     function drawChart(labels, revenue, costs, profit, catalog, clients) {
@@ -461,8 +560,12 @@
         });
     }
 
-    // Iniciar
-    run();
+    function init() {
+        loadConfig();
+        run();
+    }
+
+    init();
 </script>
 
 </body>
