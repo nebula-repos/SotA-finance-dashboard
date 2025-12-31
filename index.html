@@ -63,6 +63,22 @@
         .time-control { display: flex; align-items: center; gap: 15px; }
         .time-control label { font-weight: bold; color: #475569; }
         select { padding: 8px 15px; border-radius: 6px; border: 1px solid #cbd5e1; font-weight: bold; color: #334155; cursor: pointer; }
+        @media print {
+            @page { size: A4 landscape; margin: 8mm; }
+            body { background: white; font-size: 9px; }
+            .layout { display: block; }
+            .sidebar { display: none; }
+            .main { padding: 6px; }
+            .top-bar { page-break-inside: avoid; }
+            .chart-box { page-break-inside: avoid; height: 180px; }
+            .table-wrap { overflow: visible; }
+            .kpis { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+            .card { padding: 8px; }
+            h3 { margin: 6px 0 4px; }
+            table { min-width: auto; font-size: 0.7rem; }
+            .no-print { display: none !important; }
+            .only-print { display: block !important; }
+        }
 
         .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; }
         .card { background: white; padding: 20px; border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
@@ -89,6 +105,13 @@
         details summary::after { content: '▼'; float: right; font-size: 0.8rem; color: #94a3b8; }
         details[open] summary::after { content: '▲'; }
         .fixed-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-top: 10px; }
+        .only-print { display: none; }
+        .print-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 6px; background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 10px; padding: 8px; }
+        .print-grid div { font-size: 0.78rem; color: #334155; }
+        .print-grid strong { color: #0f172a; }
+        .print-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 10px; padding: 10px; }
+        .print-grid div { font-size: 0.8rem; color: #334155; }
+        .print-grid strong { color: #0f172a; }
     </style>
 </head>
 <body>
@@ -236,7 +259,10 @@
                     <option value="60">60 Meses (5 Años)</option>
                 </select>
             </div>
-            <div style="font-size:0.9rem; color:#64748b;">Simulador Interactivo v2.4 (Enteros)</div>
+            <div class="no-print" style="display:flex; align-items:center; gap:10px;">
+                <button class="btn ghost" type="button" onclick="exportPDF()">Exportar PDF</button>
+                <div style="font-size:0.9rem; color:#64748b;">Simulador Interactivo v2.4 (Enteros)</div>
+            </div>
         </div>
 
         <div class="kpis">
@@ -257,6 +283,8 @@
                 <strong id="k_vol">0 / $0</strong>
             </div>
         </div>
+
+        <div id="printSummary" class="only-print print-grid" aria-label="Resumen para impresión"></div>
 
         <div class="chart-box">
             <canvas id="mainChart"></canvas>
@@ -548,6 +576,26 @@
         }, []);
         drawChart(labels, dataRevenue, totalCostsSeries, dataProfit, dataClients);
         drawCashFlow(labels, dataProfit, cumulativeCash);
+        renderPrintSummary({
+            months,
+            startClients,
+            churnRate: churnRateVal,
+            growthMode,
+            growthVal,
+            price,
+            density,
+            ticket: price * density,
+            costPerSignal,
+            implementationFee,
+            implementationCost,
+            fixedCosts,
+            last: {
+                revenue: dataRevenue[lastIdx],
+                costs: totalCostLast,
+                profit: dataProfit[lastIdx],
+                clients: dataClients[lastIdx]
+            }
+        });
         persistConfig(configSnapshot);
     }
 
@@ -706,12 +754,37 @@
         });
     }
 
+    function renderPrintSummary(data) {
+        const el = document.getElementById('printSummary');
+        if (!el) return;
+        const growthLabel = data.growthMode === 'pct' ? `${data.growthVal}% mensual` : `+${data.growthVal} clientes/mes`;
+        const fixedLabel = (data.fixedCosts || []).map((v, i) => `S${i+1}: ${fmtUSD.format(v)}`).join(' | ');
+        el.innerHTML = `
+            <div><strong>Horizonte:</strong> ${data.months} meses</div>
+            <div><strong>Clientes iniciales:</strong> ${data.startClients}</div>
+            <div><strong>Crecimiento:</strong> ${growthLabel}</div>
+            <div><strong>Churn:</strong> ${data.churnRate}%</div>
+            <div><strong>Precio/Signal:</strong> ${fmtUSD.format(data.price)}</div>
+            <div><strong>Signals/Cliente:</strong> ${data.density}</div>
+            <div><strong>Ticket:</strong> ${fmtUSD.format(data.ticket)}</div>
+            <div><strong>Costo/Signal:</strong> ${fmtUSD.format(data.costPerSignal)}</div>
+            <div><strong>Fee Impl.:</strong> ${fmtUSD.format(data.implementationFee)}</div>
+            <div><strong>Costo Impl.:</strong> ${fmtUSD.format(data.implementationCost)}</div>
+            <div><strong>Costos fijos:</strong> ${fixedLabel || 'N/A'}</div>
+            <div><strong>Mes final - Ingresos:</strong> ${fmtUSD.format(data.last.revenue)}</div>
+            <div><strong>Mes final - Costos:</strong> ${fmtUSD.format(data.last.costs)}</div>
+            <div><strong>Mes final - Margen:</strong> ${fmtUSD.format(data.last.profit)}</div>
+            <div><strong>Clientes pagadores:</strong> ${Math.floor(data.last.clients)}</div>
+        `;
+    }
+
     function init() {
         loadConfig();
         run();
     }
 
     init();
+    window.exportPDF = () => window.print();
 </script>
 
 </body>
