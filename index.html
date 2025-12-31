@@ -8,7 +8,7 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         :root { 
-            --prod: #7c3aed; /* Morado RL */
+            --prod: #7c3aed;
             --client: #f59e0b; /* Naranja Clientes */
             --money: #10b981; /* Verde Dinero */
             --cost: #ef4444; /* Rojo Costos */
@@ -44,12 +44,12 @@
         input[type="range"]::-webkit-slider-thumb { appearance: none; width: 16px; height: 16px; border-radius: 50%; background: var(--money); cursor: pointer; }
         input[type="number"] { width: 100%; padding: 6px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 0.9rem; box-sizing: border-box; }
 
-        .c-prod input[type=range]::-webkit-slider-thumb { background: var(--prod); }
-        .c-prod .val { color: var(--prod); }
         .c-client input[type=range]::-webkit-slider-thumb { background: var(--client); }
         .c-client .val { color: var(--client); }
         .c-cost input[type=range]::-webkit-slider-thumb { background: var(--cost); }
         .c-cost .val { color: var(--cost); }
+        .hint { color: #94a3b8; font-size: 0.8rem; display: block; margin-top: 6px; }
+        .input-inline { display: grid; grid-template-columns: 1fr 90px; gap: 10px; align-items: center; }
 
         /* Radio Toggle Styles */
         .toggle-row { display: flex; gap: 10px; margin-bottom: 10px; background: #e2e8f0; padding: 4px; border-radius: 6px; }
@@ -104,25 +104,7 @@
             <button class="btn ghost" type="button" onclick="resetConfig()">Restablecer</button>
         </div>
 
-        <h3>1. Producción (Research Lines)</h3>
-        <div class="control-group c-prod">
-            <div class="label-row">
-                <label>RL Iniciales Activas</label>
-                <span class="val" id="v_initialRl">5</span>
-            </div>
-            <input type="range" id="initialRl" min="0" max="100" step="1" value="5" oninput="run()">
-            <small style="color:#94a3b8; font-size:0.75rem">Stock inicial de RLs activas</small>
-        </div>
-        <div class="control-group c-prod">
-            <div class="label-row">
-                <label>Nuevas RL / mes</label>
-                <span class="val" id="v_newRl">4</span>
-            </div>
-            <input type="range" id="newRlRate" min="0" max="20" step="0.5" value="4" oninput="run()">
-            <small style="color:#94a3b8; font-size:0.75rem">Crecimiento Lineal del Catálogo</small>
-        </div>
-
-        <h3>2. Clientes (Demanda)</h3>
+        <h3>1. Clientes (Demanda)</h3>
         <div class="control-group c-client">
             <div class="toggle-row">
                 <label>
@@ -153,33 +135,59 @@
                 <span class="val" id="v_churn">3%</span>
             </div>
             <input type="range" id="churnRate" min="0" max="100" step="0.5" value="3" oninput="run()">
+            <small class="hint">Definición: % de clientes que cancelan por mes.</small>
         </div>
 
-        <h3>3. Modelo de Negocio</h3>
+        <h3>2. Modelo de Negocio</h3>
         <div class="control-group c-money">
             <div class="label-row">
-                <label>Precio Venta / RL ($)</label>
-                <span class="val" id="v_price">$40</span>
+                <label>Precio por Signal ($)</label>
+                <span class="val" id="v_price">$180</span>
             </div>
-            <input type="range" id="price" min="10" max="1000" step="5" value="40" oninput="run()">
+            <input type="range" id="price" min="50" max="1000" step="5" value="180" oninput="run()">
         </div>
 
         <div class="control-group c-money">
             <div class="label-row">
-                <label>RL por Cliente (Avg)</label>
+                <label>Signals por Cliente (Avg)</label>
                 <span class="val" id="v_density">1.4</span>
             </div>
             <input type="range" id="density" min="1" max="10" step="0.1" value="1.4" oninput="run()">
+            <small class="hint">Ticket promedio = precio x signals: <strong id="ticketAvg">$252</strong></small>
         </div>
 
-        <h3>4. Costos Operativos</h3>
+        <div class="control-group c-money">
+            <div class="label-row">
+                <label>Fee de Implementación (ingreso one-time)</label>
+                <span class="val" id="v_impl_fee">$2000</span>
+            </div>
+            <div class="input-inline">
+                <input type="range" id="implementationFeeRange" min="0" max="4000" step="50" value="2000" oninput="syncImplFeeFromSlider()">
+                <input type="number" id="implementationFee" min="0" step="50" value="2000" oninput="syncImplFeeFromInput()">
+            </div>
+            <small class="hint">Ingreso one-time por cliente nuevo (mes 1).</small>
+        </div>
+
+        <h3>3. Costos Operativos</h3>
         <div class="control-group c-cost">
             <div class="label-row">
-                <label>Costo Mantenimiento / RL</label>
-                <span class="val" id="v_cost">$30</span>
+                <label>Costo por Signal</label>
+                <span class="val" id="v_cost">$40</span>
             </div>
-            <input type="range" id="costPerRL" min="0" max="1000" step="5" value="30" oninput="run()">
-            <small style="color:#ef4444; font-size:0.75rem">Costo mensual por tener 1 RL activa</small>
+            <input type="range" id="costPerSignal" min="0" max="1000" step="5" value="40" oninput="run()">
+            <small style="color:#ef4444; font-size:0.75rem">Costo mensual por cliente x signal.</small>
+        </div>
+
+        <div class="control-group c-cost">
+            <div class="label-row">
+                <label>Costo de Implementación (costo interno)</label>
+                <span class="val" id="v_impl_cost">$1200</span>
+            </div>
+            <div class="input-inline">
+                <input type="range" id="implementationCostRange" min="0" max="4000" step="50" value="1200" oninput="syncImplCostFromSlider()">
+                <input type="number" id="implementationCost" min="0" step="50" value="1200" oninput="syncImplCostFromInput()">
+            </div>
+            <small class="hint">Costo one-time por cliente nuevo (mes 1). Ajusta para ver margen de implementación.</small>
         </div>
     </div>
 
@@ -200,11 +208,11 @@
 
         <div class="kpis">
             <div class="card green">
-                <span>Ingresos (MRR Final)</span>
+                <span>Ingresos Totales (Mes Final)</span>
                 <strong id="k_mrr" style="color:var(--money)">$0</strong>
             </div>
             <div class="card red">
-                <span>Costos Operativos (Mes Final)</span>
+                <span>Costos Totales (Mes Final)</span>
                 <strong id="k_costs" style="color:var(--cost)">$0</strong>
             </div>
             <div class="card green">
@@ -212,8 +220,8 @@
                 <strong id="k_margin">$0</strong>
             </div>
             <div class="card blue">
-                <span>Clientes (Pagadores) / RLs</span>
-                <strong id="k_vol">0 / 0</strong>
+                <span>Clientes (Pagadores) / Ticket</span>
+                <strong id="k_vol">0 / $0</strong>
             </div>
         </div>
 
@@ -226,11 +234,14 @@
                 <thead>
                     <tr>
                         <th style="text-align:center">Mes</th>
-                        <th>RL Activas</th>
                         <th>Clientes (Funnel)</th>
                         <th>Clientes (Pagando)</th>
+                        <th>Signals/Cliente</th>
+                        <th>Ticket Prom.</th>
+                        <th>Ingreso Implementación</th>
                         <th>Ingresos (MRR)</th>
-                        <th>Costos Op.</th>
+                        <th>Costos Signals</th>
+                        <th>Costos Implementación</th>
                         <th>Margen (Profit)</th>
                     </tr>
                 </thead>
@@ -243,16 +254,16 @@
 <script>
     let chartInstance = null;
     const fmtUSD = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
-    const STORAGE_KEY = 'sotaFinanceConfig';
+    const STORAGE_KEY = 'sotaFinanceConfigV3';
     const defaultConfig = {
         timeframe: '24',
-        newRlRate: 4,
-        initialRl: 5,
         startClients: 3,
         churnRate: 3,
-        price: 40,
+        price: 180,
         density: 1.4,
-        costPerRL: 30,
+        costPerSignal: 40,
+        implementationFee: 2000,
+        implementationCost: 1200,
         growthRate: 15,
         growthMode: 'pct'
     };
@@ -267,13 +278,15 @@
     function applyConfig(config) {
         const cfg = { ...defaultConfig, ...config };
         document.getElementById('timeframe').value = cfg.timeframe;
-        document.getElementById('newRlRate').value = cfg.newRlRate;
-        document.getElementById('initialRl').value = cfg.initialRl;
         document.getElementById('startClients').value = cfg.startClients;
         document.getElementById('churnRate').value = cfg.churnRate;
         document.getElementById('price').value = cfg.price;
         document.getElementById('density').value = cfg.density;
-        document.getElementById('costPerRL').value = cfg.costPerRL;
+        document.getElementById('costPerSignal').value = cfg.costPerSignal;
+        document.getElementById('implementationFee').value = cfg.implementationFee;
+        document.getElementById('implementationFeeRange').value = cfg.implementationFee;
+        document.getElementById('implementationCost').value = cfg.implementationCost;
+        document.getElementById('implementationCostRange').value = cfg.implementationCost;
         document.getElementById('growthRate').value = cfg.growthRate;
 
         const growthRadio = document.querySelector(`input[name="growthMode"][value="${cfg.growthMode}"]`);
@@ -307,6 +320,30 @@
         }
     }
 
+    function syncImplFeeFromSlider() {
+        const sliderVal = parseFloat(document.getElementById('implementationFeeRange').value);
+        document.getElementById('implementationFee').value = sliderVal;
+        run();
+    }
+
+    function syncImplFeeFromInput() {
+        const inputVal = parseFloat(document.getElementById('implementationFee').value);
+        document.getElementById('implementationFeeRange').value = isNaN(inputVal) ? defaultConfig.implementationFee : inputVal;
+        run();
+    }
+
+    function syncImplCostFromSlider() {
+        const sliderVal = parseFloat(document.getElementById('implementationCostRange').value);
+        document.getElementById('implementationCost').value = sliderVal;
+        run();
+    }
+
+    function syncImplCostFromInput() {
+        const inputVal = parseFloat(document.getElementById('implementationCost').value);
+        document.getElementById('implementationCostRange').value = isNaN(inputVal) ? defaultConfig.implementationCost : inputVal;
+        run();
+    }
+
     function resetConfig() {
         applyConfig(defaultConfig);
         run();
@@ -317,14 +354,14 @@
         // --- 1. CAPTURAR INPUTS ---
         const timeframeVal = document.getElementById('timeframe').value;
         const months = parseInt(timeframeVal);
-        const newRlRate = parseFloat(document.getElementById('newRlRate').value);
-        const startCatalog = parseFloat(document.getElementById('initialRl').value);
         const startClients = parseFloat(document.getElementById('startClients').value);
         const churnRateVal = parseFloat(document.getElementById('churnRate').value);
         const churnPct = churnRateVal / 100;
         const price = parseFloat(document.getElementById('price').value);
         const density = parseFloat(document.getElementById('density').value);
-        const costPerRL = parseFloat(document.getElementById('costPerRL').value);
+        const costPerSignal = parseFloat(document.getElementById('costPerSignal').value);
+        const implementationFee = parseFloat(document.getElementById('implementationFee').value);
+        const implementationCost = parseFloat(document.getElementById('implementationCost').value);
         
         // Input de Crecimiento (su significado depende del modo)
         const growthVal = parseFloat(document.getElementById('growthRate').value);
@@ -333,24 +370,25 @@
         const growthMode = document.querySelector('input[name="growthMode"]:checked').value;
         const configSnapshot = {
             timeframe: timeframeVal,
-            newRlRate,
-            initialRl: startCatalog,
             startClients,
             churnRate: churnRateVal,
             price,
             density,
-            costPerRL,
+            costPerSignal,
+            implementationFee,
+            implementationCost,
             growthRate: growthVal,
             growthMode
         };
 
         // --- 2. ACTUALIZAR UI TEXTOS ---
-        document.getElementById('v_initialRl').innerText = startCatalog;
-        document.getElementById('v_newRl').innerText = newRlRate;
         document.getElementById('v_churn').innerText = (churnPct*100).toFixed(1) + "%";
         document.getElementById('v_price').innerText = "$" + price;
         document.getElementById('v_density').innerText = density;
-        document.getElementById('v_cost').innerText = "$" + costPerRL;
+        document.getElementById('v_cost').innerText = "$" + costPerSignal;
+        document.getElementById('v_impl_fee').innerText = "$" + implementationFee;
+        document.getElementById('v_impl_cost').innerText = "$" + implementationCost;
+        document.getElementById('ticketAvg').innerText = fmtUSD.format(price * density);
 
         // Actualizar etiqueta dinámica según modo
         if(growthMode === 'pct') {
@@ -362,14 +400,14 @@
         }
 
         // --- 3. INICIALIZACIÓN ---
-        let currentCatalog = startCatalog; 
-        let currentClients = startClients; // Este guarda los decimales (el "Pipeline")
+        let currentClients = startClients; // Guarda decimales (pipeline)
         
         let labels = [];
-        let dataCatalog = [];
         let dataClients = [];
         let dataRevenue = [];
-        let dataCosts = [];
+        let dataImplRevenue = [];
+        let dataSignalCosts = [];
+        let dataImplCosts = [];
         let dataProfit = [];
 
         const tbody = document.querySelector('#dataTable tbody');
@@ -378,47 +416,43 @@
         for(let m=1; m<=months; m++) {
             labels.push(`Mes ${m}`);
 
-            // A. PRODUCCIÓN 
-            currentCatalog += newRlRate;
-
-            // B. VENTAS (INGRESOS) - LÓGICA ENTERA
-            // Usamos Math.floor() para calcular a cuántos les cobramos realmente
-            let payingClients = Math.floor(currentClients);
-
-            let effectiveDensity = Math.min(density, currentCatalog);
-            let totalSoldUnits = payingClients * effectiveDensity; // Solo facturan los clientes "enteros"
-            let revenue = totalSoldUnits * price;
-
-            // C. COSTOS
-            let opCosts = currentCatalog * costPerRL;
-
-            // D. MARGEN
-            let profit = revenue - opCosts;
-
-            // E. CÁLCULO DEL CRECIMIENTO (Para el próximo mes)
-            // Aquí usamos currentClients (con decimales) para mantener la inercia del crecimiento
-            let nextClients = 0;
-
+            // A. MOVIMIENTO DE CLIENTES (churn y altas del mes)
+            let churned = currentClients * churnPct;
+            let newClients = 0;
             if (growthMode === 'pct') {
-                // Modo Porcentual (Compuesto)
-                let growthFactor = (growthVal / 100); 
-                // Net Growth = Clients * (1 + Growth - Churn)
-                nextClients = currentClients * (1 + growthFactor - churnPct);
+                newClients = currentClients * (growthVal / 100);
             } else {
-                // Modo Lineal (Fijo)
-                // Net Growth = Clients + NuevosFijos - (Clients * Churn)
-                // Nota: El churn siempre afecta al stock actual
-                let churned = currentClients * churnPct;
-                nextClients = currentClients + growthVal - churned;
+                newClients = growthVal;
             }
 
-            if(nextClients < 0) nextClients = 0;
+            let activeClients = currentClients - churned + newClients;
+            if (activeClients < 0) activeClients = 0;
+
+            // B. VENTAS (INGRESOS)
+            // Usamos Math.floor() para calcular a cuántos les cobramos realmente
+            let payingClients = Math.floor(activeClients);
+
+            let totalSoldUnits = payingClients * density; // signals por cliente
+            let revenueRecurring = totalSoldUnits * price;
+
+            // C. COSTOS
+            let signalCosts = totalSoldUnits * costPerSignal;
+
+            // Costos de implementación one-time para clientes nuevos (no se acumula)
+            let newClientsFloor = Math.max(0, Math.floor(newClients));
+            let implCost = newClientsFloor * implementationCost;
+            let implRevenue = newClientsFloor * implementationFee;
+
+            // D. MARGEN
+            let revenue = revenueRecurring + implRevenue;
+            let profit = revenue - signalCosts - implCost;
 
             // Guardar Datos
-            dataCatalog.push(currentCatalog);
             dataClients.push(payingClients); // En el gráfico mostramos los que pagan
             dataRevenue.push(revenue);
-            dataCosts.push(opCosts);
+            dataImplRevenue.push(implRevenue);
+            dataSignalCosts.push(signalCosts);
+            dataImplCosts.push(implCost);
             dataProfit.push(profit);
 
             // Renderizar Tabla
@@ -427,32 +461,38 @@
 
             tr.innerHTML = `
                 <td style="text-align:center; font-weight:bold">${m}</td>
-                <td style="color:var(--prod)">${currentCatalog.toFixed(1)}</td>
-                <td style="color:#94a3b8">${currentClients.toFixed(2)}</td> <td style="color:var(--client); font-weight:bold">${payingClients}</td> <td class="money-pos">${fmtUSD.format(revenue)}</td>
-                <td class="money-neg">-${fmtUSD.format(opCosts)}</td>
+                <td style="color:#94a3b8">${activeClients.toFixed(2)}</td>
+                <td style="color:var(--client); font-weight:bold">${payingClients}</td>
+                <td>${density.toFixed(1)}</td>
+                <td>${fmtUSD.format(price * density)}</td>
+                <td class="money-pos">${fmtUSD.format(implRevenue)}</td>
+                <td class="money-pos">${fmtUSD.format(revenueRecurring)}</td>
+                <td class="money-neg">-${fmtUSD.format(signalCosts)}</td>
+                <td class="money-neg">-${fmtUSD.format(implCost)}</td>
                 <td class="${profitClass}">${fmtUSD.format(profit)}</td>
             `;
             tbody.appendChild(tr);
 
             // Actualizamos la variable para la siguiente vuelta
-            currentClients = nextClients;
+            currentClients = activeClients;
         }
 
         // --- 4. ACTUALIZAR KPI ---
         const lastIdx = months - 1;
         document.getElementById('k_mrr').innerText = fmtUSD.format(dataRevenue[lastIdx]);
-        document.getElementById('k_costs').innerText = fmtUSD.format(dataCosts[lastIdx]);
+        const totalCostLast = dataSignalCosts[lastIdx] + dataImplCosts[lastIdx];
+        document.getElementById('k_costs').innerText = fmtUSD.format(totalCostLast);
         document.getElementById('k_margin').innerText = fmtUSD.format(dataProfit[lastIdx]);
         document.getElementById('k_margin').style.color = dataProfit[lastIdx] >= 0 ? 'var(--money)' : 'var(--cost)';
-        
-        document.getElementById('k_vol').innerText = `${Math.floor(dataClients[lastIdx])} Pagadores / ${Math.floor(dataCatalog[lastIdx])} RLs`;
+        document.getElementById('k_vol').innerText = `${Math.floor(dataClients[lastIdx])} Pagadores / Ticket ${fmtUSD.format(price * density)}`;
 
         // --- 5. GRÁFICO ---
-        drawChart(labels, dataRevenue, dataCosts, dataProfit, dataCatalog, dataClients);
+        const totalCostsSeries = dataSignalCosts.map((c, idx) => c + dataImplCosts[idx]);
+        drawChart(labels, dataRevenue, totalCostsSeries, dataProfit, dataClients);
         persistConfig(configSnapshot);
     }
 
-    function drawChart(labels, revenue, costs, profit, catalog, clients) {
+    function drawChart(labels, revenue, costs, profit, clients) {
         const ctx = document.getElementById('mainChart').getContext('2d');
         if(chartInstance) chartInstance.destroy();
 
@@ -507,17 +547,6 @@
                         fill: false,
                         yAxisID: 'y1', 
                         order: 4
-                    },
-                    {
-                        label: 'RL Activas',
-                        data: catalog,
-                        borderColor: '#7c3aed', 
-                        borderWidth: 2,
-                        pointRadius: 0,
-                        tension: 0.1, 
-                        fill: false,
-                        yAxisID: 'y1', 
-                        order: 5
                     }
                 ]
             },
